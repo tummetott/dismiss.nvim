@@ -4,6 +4,7 @@ local defaults = {
     match = {
         filetypes = {},
         buftypes = {},
+        condition = nil,
     },
     labels = {
         charset = {
@@ -34,8 +35,16 @@ end
 
 local function is_dismissible_win(win)
     local buf = vim.api.nvim_win_get_buf(win)
+    local condition_matches = false
+
+    if type(config.match.condition) == "function" then
+        local ok, matches = pcall(config.match.condition, win)
+        condition_matches = ok and matches == true
+    end
+
     return vim.tbl_contains(config.match.filetypes, vim.bo[buf].filetype)
         or vim.tbl_contains(config.match.buftypes, vim.bo[buf].buftype)
+        or condition_matches
 end
 
 local function get_dismissible_wins()
@@ -49,6 +58,10 @@ local function get_dismissible_wins()
     end
 
     return wins
+end
+
+function M.has_dismissable_win()
+    return #get_dismissible_wins() > 0
 end
 
 local function assign_labels(windows)
@@ -80,6 +93,10 @@ local function show_overlays(labeled_windows)
         local label_buf = vim.api.nvim_create_buf(false, true)
         local w = vim.api.nvim_win_get_width(target)
         local h = vim.api.nvim_win_get_height(target)
+        local has_winbar = vim.api.nvim_get_option_value("winbar", { win = target }) ~= ""
+        -- Windows with a winbar need the mask to be one row shorter than the
+        -- window. Otherwise, it covers the bottom win separator or statusline.
+        local mask_height = has_winbar and math.max(h - 1, 1) or h
         -- Both floats are positioned relative to the target window and never take focus.
         local base = {
             relative = "win",
@@ -89,12 +106,11 @@ local function show_overlays(labeled_windows)
             focusable = false,
             noautocmd = true,
         }
-        -- The mask float blanks the target window by painting over it with Normal.
         local mask_win = vim.api.nvim_open_win(mask_buf, false, vim.tbl_extend("force", base, {
             row = 0,
             col = 0,
             width = w,
-            height = math.max(h - 1, 1), -- do not cover the bottom win separator / statusline
+            height = mask_height,
             zindex = 100,
         }))
         vim.api.nvim_set_option_value(
@@ -144,11 +160,18 @@ local function hide_overlays(overlays)
 end
 
 function M.dismiss()
-    local current = vim.api.nvim_get_current_win()
+    local current_win = vim.api.nvim_get_current_win()
+    local current_win_config = vim.api.nvim_win_get_config(current_win)
+
+    -- Floats are transient UI; close the focused one immediately.
+    if current_win_config.relative ~= "" then
+        pcall(vim.api.nvim_win_close, current_win, true)
+        return
+    end
 
     -- If the cursor is already in a dismissible window, dismiss it immediately.
-    if is_dismissible_win(current) then
-        pcall(vim.api.nvim_win_close, current, true)
+    if is_dismissible_win(current_win) then
+        pcall(vim.api.nvim_win_close, current_win, true)
         return
     end
 
