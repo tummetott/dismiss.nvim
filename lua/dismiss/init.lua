@@ -7,9 +7,9 @@ local defaults = {
     },
     labels = {
         charset = {
-            "a", "s", "d", "f", "g", "h", "j", "k", "l",
-            "q", "w", "e", "r", "t", "y", "u", "i", "o", "p",
-            "z", "x", "c", "v", "b", "n", "m",
+            "j", "k", "l", "a", "s", "d", "f", "h", "g",
+            "u", "i", "o", "p", "q", "w", "e", "r", "y", "t",
+            "n", "m", "z", "x", "c", "b", "v",
         },
         hlgroup = "DismissLabel",
     },
