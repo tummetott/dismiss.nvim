@@ -7,11 +7,7 @@ local defaults = {
         condition = nil,
     },
     labels = {
-        charset = {
-            "j", "k", "l", "a", "s", "d", "f", "h", "g",
-            "u", "i", "o", "p", "q", "w", "e", "r", "y", "t",
-            "n", "m", "z", "x", "c", "b", "v",
-        },
+        charset = "jklasdfhguiopqwert",
         hlgroup = "DismissLabel",
     },
 }
@@ -73,9 +69,9 @@ local function assign_labels(windows)
     end)
 
     for i, win in ipairs(windows) do
-        local key = config.labels.charset[i]
+        local key = config.labels.charset:sub(i, i)
         -- Each label character selects one dismissible window.
-        if not key then break end
+        if key == "" then break end
         labeled_windows[key] = win
     end
 
