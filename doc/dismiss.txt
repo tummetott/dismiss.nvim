@@ -1,0 +1,148 @@
+*dismiss.nvim*  Close utility windows without breaking your flow.
+
+
+Author: Tummetott
+
+==============================================================================
+CONTENTS                                                     *dismiss-contents*
+
+1. DESCRIPTION...........................................|dismiss-description|
+2. REQUIREMENTS.......................................|dismiss-requirements|
+3. API.......................................................|dismiss-api|
+4. CONFIGURATION......................................|dismiss-configuration|
+
+==============================================================================
+1. DESCRIPTION                                            *dismiss-description*
+
+Next to the main coding window, it's common to have a sidebar, a symbol
+outline, and a quickfix or trouble list open at the same time. Closing one of
+them requires navigating to it and pressing `<c-w>q`. |dismiss.nvim| provides
+two commands to close windows without breaking your flow.
+
+|dismiss.dismiss()| is the smart path. Define a set of dismissible windows by
+filetype, buftype, or a custom condition, and it figures out what to close:
+
+- If the focused window is a float, close it.
+- If there is only one dismissible window, close it.
+- If the focused window is dismissible, close it (configurable).
+- If there are multiple dismissible windows, open a labeled picker.
+
+|dismiss.pick()| skips the rules entirely and opens a labeled picker over all
+normal windows in the current tabpage — useful when you want to close any
+window, not just the ones configured as dismissible.
+
+==============================================================================
+2. REQUIREMENTS                                          *dismiss-requirements*
+
+Neovim 0.9.0 or higher.
+
+==============================================================================
+3. API                                                            *dismiss-api*
+
+setup({opts})                                               *dismiss.setup()*
+
+        Initialize and configure the plugin. See |dismiss-configuration|.
+
+dismiss()                                                *dismiss.dismiss()*
+
+        Close a dismissible window using smart rules. Returns `true` when a
+        window was closed, `false` when nothing was dismissed (no dismissible
+        windows found, or the picker was cancelled).
+
+pick()                                                      *dismiss.pick()*
+
+        Open a labeled picker over all normal windows in the current tabpage,
+        ignoring match rules. If the focused window is a float, it is closed
+        immediately instead. Returns `true` when a window was closed, `false`
+        when the picker was cancelled.
+
+has_dismissable_win()                              *dismiss.has_dismissable_win()*
+
+        Returns `true` when the current tabpage contains at least one
+        dismissible window. Useful for conditionally showing a statusline
+        indicator or keybinding hint.
+
+==============================================================================
+4. CONFIGURATION                                        *dismiss-configuration*
+
+                                                              *dismiss.opts*
+Options are passed to |dismiss.setup()|.
+>lua
+    require('dismiss').setup({
+        prefer_focused = false,
+        fallback_to_current = false,
+        match = {
+            filetypes = {},
+            buftypes = {},
+            condition = nil,
+        },
+        picker = {
+            charset = 'jklasdfhguiopqwertnmzxcbv',
+            hlgroup = 'DismissLabel',
+        },
+    })
+<
+
+prefer_focused                                   *dismiss.opts.prefer_focused*
+        Type: `boolean` ~
+        Default: `false` ~
+
+        When `true`, |dismiss.dismiss()| closes the focused window directly if
+        it is dismissible, without showing the picker.
+
+fallback_to_current                         *dismiss.opts.fallback_to_current*
+        Type: `boolean` ~
+        Default: `false` ~
+
+        When `true`, |dismiss.dismiss()| closes the current window when no
+        dismissible windows are found. Quits Neovim when it is the last
+        window.
+
+match.filetypes                               *dismiss.opts.match.filetypes*
+        Type: `string[]` ~
+        Default: `{}` ~
+
+        List of buffer filetypes treated as dismissible.
+
+match.buftypes                                 *dismiss.opts.match.buftypes*
+        Type: `string[]` ~
+        Default: `{}` ~
+
+        List of buffer buftypes treated as dismissible.
+
+match.condition                               *dismiss.opts.match.condition*
+        Type: `fun(win: integer): boolean` ~
+        Default: `nil` ~
+
+        Callback that receives a window id and returns `true` when that window
+        should be treated as dismissible. Useful for windows that cannot be
+        matched by filetype or buftype alone. Errors thrown by the callback
+        are silently ignored and the window is treated as not matched.
+
+        Example — match the command-line window (`q:`, `q/`):
+>lua
+            condition = function()
+                return vim.fn.getcmdwintype() ~= ""
+            end
+<
+        Matching is additive. A window is dismissible when it matches
+        `filetypes`, `buftypes`, or `condition`. At least one matcher must be
+        configured; with all matchers unset, the plugin does nothing.
+
+picker.charset                                 *dismiss.opts.picker.charset*
+        Type: `string` ~
+        Default: `'jklasdfhguiopqwertnmzxcbv'` ~
+
+        Characters used as picker labels. Each character maps to one
+        dismissible window. Windows beyond the length of the string are not
+        labeled and cannot be selected.
+
+picker.hlgroup                                 *dismiss.opts.picker.hlgroup*
+        Type: `string` ~
+        Default: `'DismissLabel'` ~
+
+        Highlight group used for the label overlay. If the group does not
+        exist, the plugin derives it from `Visual` with `bold = true`.
+
+==============================================================================
+vim:tw=78:ts=8:ft=help:norl:
