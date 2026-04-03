@@ -22,13 +22,6 @@ Initializes and configures the plugin. See [Configuration](#configuration).
 
 ```lua
 ---@return boolean
-require("dismiss").has_dismissable_win()
-```
-
-Returns `true` when the current tabpage contains at least one dismissible window.
-
-```lua
----@return boolean
 require("dismiss").dismiss()
 ```
 
@@ -40,6 +33,13 @@ require("dismiss").pick()
 ```
 
 Opens a labeled picker over all normal windows in the current tabpage, ignoring match rules. If the focused window is a float, it is closed first instead. Returns `true` when a window was closed, `false` when the picker was cancelled.
+
+```lua
+---@return boolean
+require("dismiss").has_dismissable_win()
+```
+
+Returns `true` when the current tabpage contains at least one dismissible window.
 
 ## ⚡️ Requirements
 
