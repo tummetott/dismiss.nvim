@@ -1,6 +1,36 @@
 local M = {}
 
+---@class dismiss.Config.Match
+---@field filetypes string[]
+---@field buftypes string[]
+---@field condition? fun(win: integer): boolean
+
+---@class dismiss.ConfigOptions.Match
+---@field filetypes? string[]
+---@field buftypes? string[]
+---@field condition? fun(win: integer): boolean
+
+---@class dismiss.Config.Labels
+---@field charset string
+---@field hlgroup string
+
+---@class dismiss.ConfigOptions.Labels
+---@field charset? string
+---@field hlgroup? string
+
+---@class dismiss.Config
+---@field prefer_focused boolean
+---@field match dismiss.Config.Match
+---@field labels dismiss.Config.Labels
+
+---@class dismiss.ConfigOptions
+---@field prefer_focused? boolean
+---@field match? dismiss.ConfigOptions.Match
+---@field labels? dismiss.ConfigOptions.Labels
+
+---@type dismiss.Config
 local defaults = {
+    prefer_focused = true,
     match = {
         filetypes = {},
         buftypes = {},
@@ -12,8 +42,10 @@ local defaults = {
     },
 }
 
-local config = defaults
+---@type dismiss.Config
+local config = vim.deepcopy(defaults)
 
+---@param opts? dismiss.ConfigOptions
 function M.setup(opts)
     config = vim.tbl_deep_extend("force", vim.deepcopy(defaults), opts or {})
 end
@@ -155,6 +187,7 @@ local function hide_overlays(overlays)
     end
 end
 
+---@return boolean
 function M.dismiss()
     local current_win = vim.api.nvim_get_current_win()
     local current_win_config = vim.api.nvim_win_get_config(current_win)
@@ -162,26 +195,26 @@ function M.dismiss()
     -- Floats are transient UI; close the focused one immediately.
     if current_win_config.relative ~= "" then
         pcall(vim.api.nvim_win_close, current_win, true)
-        return
+        return true
     end
 
-    -- If the cursor is already in a dismissible window, dismiss it immediately.
-    if is_dismissible_win(current_win) then
+    -- When prefer_focused is set, dismiss the focused window directly without a picker.
+    if config.prefer_focused and is_dismissible_win(current_win) then
         pcall(vim.api.nvim_win_close, current_win, true)
-        return
+        return true
     end
 
     local wins = get_dismissible_wins()
 
     -- Return immediately when the current tabpage has no dismissible windows.
     if #wins == 0 then
-        return
+        return false
     end
 
     -- Close the only dismissible window directly when there is no choice to make.
     if #wins == 1 then
         pcall(vim.api.nvim_win_close, wins[1], true)
-        return
+        return true
     end
 
     -- With multiple candidates, label them, render overlays, and wait for one keypress.
@@ -195,7 +228,7 @@ function M.dismiss()
 
     -- Ignore cancelled input and keys that do not map to a labeled window.
     if not key or key == vim.fn.nr2char(27) then
-        return
+        return false
     end
 
     local target = labeled_windows[key]
@@ -203,7 +236,10 @@ function M.dismiss()
     if target then
         -- The chosen label resolves directly to the window that should be closed.
         pcall(vim.api.nvim_win_close, target, true)
+        return true
     end
+
+    return false
 end
 
 return M
