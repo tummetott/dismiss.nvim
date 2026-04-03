@@ -10,33 +10,36 @@ local M = {}
 ---@field buftypes? string[]
 ---@field condition? fun(win: integer): boolean
 
----@class dismiss.Config.Labels
+---@class dismiss.Config.Picker
 ---@field charset string
 ---@field hlgroup string
 
----@class dismiss.ConfigOptions.Labels
+---@class dismiss.ConfigOptions.Picker
 ---@field charset? string
 ---@field hlgroup? string
 
 ---@class dismiss.Config
 ---@field prefer_focused boolean
+---@field fallback_to_current boolean
 ---@field match dismiss.Config.Match
----@field labels dismiss.Config.Labels
+---@field picker dismiss.Config.Picker
 
 ---@class dismiss.ConfigOptions
 ---@field prefer_focused? boolean
+---@field fallback_to_current? boolean
 ---@field match? dismiss.ConfigOptions.Match
----@field labels? dismiss.ConfigOptions.Labels
+---@field picker? dismiss.ConfigOptions.Picker
 
 ---@type dismiss.Config
 local defaults = {
-    prefer_focused = true,
+    prefer_focused = false,
+    fallback_to_current = false,
     match = {
         filetypes = {},
         buftypes = {},
         condition = nil,
     },
-    labels = {
+    picker = {
         charset = "jklasdfhguiopqwert",
         hlgroup = "DismissLabel",
     },
@@ -52,13 +55,13 @@ end
 
 local function derive_highlight_group()
     -- Use the configured label highlight when it exists; otherwise derive it from Visual.
-    if vim.fn.hlexists(config.labels.hlgroup) == 1 then
+    if vim.fn.hlexists(config.picker.hlgroup) == 1 then
         return
     end
 
     local visual = vim.api.nvim_get_hl(0, { name = "Visual", link = false })
     visual.bold = true
-    vim.api.nvim_set_hl(0, config.labels.hlgroup, visual)
+    vim.api.nvim_set_hl(0, config.picker.hlgroup, visual)
 end
 
 local function is_dismissible_win(win)
@@ -75,12 +78,24 @@ local function is_dismissible_win(win)
         or condition_matches
 end
 
+local function get_normal_wins()
+    local wins = {}
+
+    for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+        if vim.api.nvim_win_get_config(win).relative == "" then
+            table.insert(wins, win)
+        end
+    end
+
+    return wins
+end
+
 local function get_dismissible_wins()
     local wins = {}
 
     -- Only consider normal tabpage windows. Floats are part of the picker UI itself.
-    for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-        if vim.api.nvim_win_get_config(win).relative == "" and is_dismissible_win(win) then
+    for _, win in ipairs(get_normal_wins()) do
+        if is_dismissible_win(win) then
             table.insert(wins, win)
         end
     end
@@ -101,7 +116,7 @@ local function assign_labels(windows)
     end)
 
     for i, win in ipairs(windows) do
-        local key = config.labels.charset:sub(i, i)
+        local key = config.picker.charset:sub(i, i)
         -- Each label character selects one dismissible window.
         if key == "" then break end
         labeled_windows[key] = win
@@ -160,7 +175,7 @@ local function show_overlays(labeled_windows)
         }))
         vim.api.nvim_set_option_value(
             "winhighlight",
-            "NormalFloat:" .. config.labels.hlgroup,
+            "NormalFloat:" .. config.picker.hlgroup,
             { win = label_win }
         )
 
@@ -187,6 +202,27 @@ local function hide_overlays(overlays)
     end
 end
 
+-- Show a labeled picker over the given windows and return the chosen window.
+-- Returns nil when the picker is cancelled or input does not map to a label.
+---@param windows integer[]
+---@return integer|nil
+local function pick_window(windows)
+    local labeled_windows = assign_labels(windows)
+    local overlays = show_overlays(labeled_windows)
+    -- getchar() blocks until a single selection key or <Esc>.
+    local ok, ch = pcall(vim.fn.getchar)
+    hide_overlays(overlays)
+
+    local key = ok and vim.fn.nr2char(ch)
+
+    -- Ignore cancelled input and keys that do not map to a labeled window.
+    if not key or key == vim.fn.nr2char(27) then
+        return nil
+    end
+
+    return labeled_windows[key]
+end
+
 ---@return boolean
 function M.dismiss()
     local current_win = vim.api.nvim_get_current_win()
@@ -206,8 +242,12 @@ function M.dismiss()
 
     local wins = get_dismissible_wins()
 
-    -- Return immediately when the current tabpage has no dismissible windows.
+    -- When no dismissible windows exist, optionally close the current window as a last resort.
     if #wins == 0 then
+        if config.fallback_to_current then
+            vim.cmd("quit")
+            return true
+        end
         return false
     end
 
@@ -217,24 +257,41 @@ function M.dismiss()
         return true
     end
 
-    -- With multiple candidates, label them, render overlays, and wait for one keypress.
-    local labeled_windows = assign_labels(wins)
-    local overlays = show_overlays(labeled_windows)
-    -- getchar() blocks until a single selection key or <Esc>.
-    local ok, ch = pcall(vim.fn.getchar)
-    hide_overlays(overlays)
+    local target = pick_window(wins)
 
-    local key = ok and vim.fn.nr2char(ch)
+    if target then
+        pcall(vim.api.nvim_win_close, target, true)
+        return true
+    end
 
-    -- Ignore cancelled input and keys that do not map to a labeled window.
-    if not key or key == vim.fn.nr2char(27) then
+    return false
+end
+
+---@return boolean
+function M.pick()
+    local current_win = vim.api.nvim_get_current_win()
+    local current_win_config = vim.api.nvim_win_get_config(current_win)
+
+    -- Floats hide picker labels; close the focused one before proceeding.
+    if current_win_config.relative ~= "" then
+        pcall(vim.api.nvim_win_close, current_win, true)
+        return true
+    end
+
+    local wins = get_normal_wins()
+
+    if #wins == 0 then
         return false
     end
 
-    local target = labeled_windows[key]
+    if #wins == 1 then
+        vim.cmd("quit")
+        return true
+    end
+
+    local target = pick_window(wins)
 
     if target then
-        -- The chosen label resolves directly to the window that should be closed.
         pcall(vim.api.nvim_win_close, target, true)
         return true
     end

@@ -1,13 +1,15 @@
 # dismiss.nvim
 
-Next to my main coding window, I usually have a sidebar on the left, a symbol outline on the right, and a quickfix or trouble list on the bottom. I always found it annoying to close one of them, because I had to navigate to that window and press `<c-w>q`. This plugin provides a single dismiss command that closes your desired window based on rules or a picker.
+Next to my main coding window, I usually have a sidebar on the left, a symbol outline on the right, and a quickfix or trouble list on the bottom. I always found it annoying to close one of them, because I had to navigate to that window and press `<c-w>q`. This plugin provides two commands to close windows without breaking your flow.
 
-* First you define a set of `dismissible` windows by filetype, buftype, or a custom match condition.
-* Once `dismiss()` is called, it determines which `dismissible` window to close by checking these rules:
-    * Current window is a float? Close it.
-    * Only one `dismissible` window open? Close it.
-    * Current window is `dismissible`? Close it (configurable).
-    * More than one `dismissible` window open? Show a labeled picker and let the user decide.
+`dismiss()` is the smart path. You define a set of `dismissible` windows by filetype, buftype, or a custom match condition, and it figures out what to close:
+
+* Current window is a float? Close it.
+* Only one `dismissible` window open? Close it.
+* Current window is `dismissible`? Close it (configurable).
+* More than one `dismissible` window open? Show a labeled picker and let the user decide.
+
+`pick()` skips the rules entirely and opens a labeled picker over all normal windows in the current tabpage — useful when you want to close any window, not just the ones you configured as dismissible.
 
 ## 🚀 API
 
@@ -32,6 +34,13 @@ require("dismiss").dismiss()
 
 Closes a dismissible window according to the rules described above. Returns `true` when a window was closed, `false` when nothing was dismissed (no dismissible windows, or the picker was cancelled).
 
+```lua
+---@return boolean
+require("dismiss").pick()
+```
+
+Opens a labeled picker over all normal windows in the current tabpage, ignoring match rules. If the focused window is a float, it is closed first instead. Returns `true` when a window was closed, `false` when the picker was cancelled.
+
 ## ⚡️ Requirements
 
 Neovim `0.9.0` or newer
@@ -52,7 +61,16 @@ Neovim `0.9.0` or newer
             function()
                 require("dismiss").dismiss()
             end,
+            mode = { "n", "t" },
             desc = "Dismiss window",
+        },
+        {
+            "g<c-q>",
+            function()
+                require("dismiss").pick()
+            end,
+            mode = { "n", "t" },
+            desc = "Pick window to close",
         },
     },
 }
@@ -65,7 +83,10 @@ Neovim `0.9.0` or newer
 {
     -- When true, dismiss() closes the focused window directly if it is
     -- dismissible, without showing the picker.
-    prefer_focused = true,
+    prefer_focused = false,
+    -- When true, dismiss() closes the current window if no dismissible windows
+    -- are found in the tabpage.
+    fallback_to_current = false,
 
     -- Rules for matching dismissible windows.
     match = {
@@ -79,7 +100,7 @@ Neovim `0.9.0` or newer
     },
 
     -- Picker appearance.
-    labels = {
+    picker = {
         -- Characters used as picker labels.
         charset = "jklasdfhguiopqwertnmzxcbv",
         -- Highlight group used for the label overlay.
@@ -90,9 +111,17 @@ Neovim `0.9.0` or newer
 
 Matching is additive. A window is dismissible when its buffer matches `filetypes`, `buftypes`, or `condition`. At least one matcher must be configured; with all matchers unset, the plugin does nothing.
 
+`match.condition` is useful for windows that cannot be matched by filetype or buftype alone. For example, to make the command-line window (`q:`, `q/`) dismissible:
+
+```lua
+condition = function()
+    return vim.fn.getcmdwintype() ~= ""
+end
+```
+
 If `match.condition` throws an error, `dismiss.nvim` ignores it and treats the window as not matched.
 
-If `labels.hlgroup` does not exist, the plugin derives it from `Visual` with `bold = true`.
+If `picker.hlgroup` does not exist, the plugin derives it from `Visual` with `bold = true`.
 
 ## 🪟 Picker controls
 
