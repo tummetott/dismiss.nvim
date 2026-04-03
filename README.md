@@ -11,6 +11,10 @@ Next to my main coding window, I usually have a sidebar on the left, a symbol ou
 
 `pick()` skips the rules entirely and opens a labeled picker over all normal windows in the current tabpage — useful when you want to close any window, not just the ones you configured as dismissible.
 
+## 🎬 Demo
+
+[![Demo](demo.gif)](demo.mp4)
+
 ## 🚀 API
 
 ```lua
